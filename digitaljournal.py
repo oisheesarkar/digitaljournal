@@ -121,13 +121,15 @@ class DigitalJournalApp:
                 'title': title,
                 'content': content,
                 'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'date_modified': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                'date_modified': datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Add date modified
             }
-            self.entries.append(entry)
+            self.entries.append(entry)  # Append to the local entries
             save_entries(self.entries)
-            messagebox.showinfo("Entry Added", "Your entry has been added successfully.")
+
+            # Refresh the treeview to show the new entry
             self.refresh_treeview()
-            dialog.destroy()
+
+            dialog.destroy()  # Close the dialog and return to main interface
 
         tk.Button(dialog, text="Save Entry", command=save_and_close, bg="#4CAF50", fg="white",
                   font=("Helvetica", 12)).grid(row=2, column=1, padx=10, pady=10)
