@@ -9,10 +9,15 @@ JOURNAL_FILE = 'journal_entries.json'
 
 
 def load_entries():
-    """Load journal entries from the JSON file."""
+    """Load journal entries from the JSON file and add 'date_modified' if not present."""
     if os.path.exists(JOURNAL_FILE):
         with open(JOURNAL_FILE, 'r') as file:
-            return json.load(file)
+            entries = json.load(file)
+            # Ensure 'date_modified' is present in each entry
+            for entry in entries:
+                if 'date_modified' not in entry:
+                    entry['date_modified'] = entry['timestamp']
+            return entries
     return []
 
 
@@ -58,14 +63,17 @@ class DigitalJournalApp:
         tk.Button(button_frame, text="Delete Entry", command=self.delete_entry, bg="#f44336", fg="white",
                   font=("Helvetica", 12)).grid(row=0, column=2, padx=10)
 
-        # Treeview for displaying journal entries
-        self.entry_tree = ttk.Treeview(self.root, columns=("Title", "Date"), show='headings', height=10)
+        # Treeview for displaying journal entries with Date Modified
+        self.entry_tree = ttk.Treeview(self.root, columns=("Title", "Date Created", "Date Modified"), show='headings',
+                                       height=10)
         self.entry_tree.heading("Title", text="Title")
-        self.entry_tree.heading("Date", text="Date")
-        self.entry_tree.column("Title", anchor="w", width=300)  # Left align Title
-        self.entry_tree.column("Date", anchor="w", width=120)  # Left align Date
+        self.entry_tree.heading("Date Created", text="Date Created")
+        self.entry_tree.heading("Date Modified", text="Date Modified")
+        self.entry_tree.column("Title", anchor="w", width=200)
+        self.entry_tree.column("Date Created", anchor="w", width=120)
+        self.entry_tree.column("Date Modified", anchor="w", width=120)
         self.entry_tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        self.entry_tree.bind("<ButtonRelease-1>", self.display_entry)  # Change to single click
+        self.entry_tree.bind("<ButtonRelease-1>", self.display_entry)
 
         # Scrolled text area to show selected journal entry
         self.entry_text = scrolledtext.ScrolledText(self.root, wrap=tk.WORD, width=50, height=10, state=tk.DISABLED,
@@ -75,7 +83,7 @@ class DigitalJournalApp:
 
         # Store the full list of entries for displaying
         self.entries = load_entries()
-        self.search_results = []  # To store search results
+        self.search_results = []
         self.refresh_treeview()
 
     def refresh_treeview(self):
@@ -83,13 +91,11 @@ class DigitalJournalApp:
         self.entry_tree.delete(*self.entry_tree.get_children())
 
         if not self.entries:
-            # Show placeholder text
-            self.entry_tree.insert("", "end", values=("No journal entries available.", ""))
-            self.entry_text.pack_forget()  # Hide the text area if no entries available
+            self.entry_tree.insert("", "end", values=("No journal entries available.", "", ""))
+            self.entry_text.pack_forget()
         else:
-            # Insert entry titles and dates
             for entry in self.entries:
-                self.entry_tree.insert("", "end", values=(entry['title'], entry['timestamp']))
+                self.entry_tree.insert("", "end", values=(entry['title'], entry['timestamp'], entry['date_modified']))
 
     def add_entry(self):
         """Add a new journal entry via a custom dialog box."""
@@ -113,9 +119,10 @@ class DigitalJournalApp:
             entry = {
                 'title': title,
                 'content': content,
-                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'date_modified': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             }
-            self.entries.append(entry)  # Append to the local entries
+            self.entries.append(entry)
             save_entries(self.entries)
             messagebox.showinfo("Entry Added", "Your entry has been added successfully.")
             self.refresh_treeview()
@@ -128,28 +135,26 @@ class DigitalJournalApp:
         self.root.wait_window(dialog)
 
     def edit_entry(self):
-        """Edit the selected journal entry."""
+        """Edit the selected journal entry and update the date modified field."""
         selected_item = self.entry_tree.selection()
         if not selected_item:
             messagebox.showwarning("Select Entry", "Please select an entry to edit.")
             return
 
-        # Retrieve the entry from search results or original entries
         entry_index = self.entry_tree.index(selected_item)
         entry = self.search_results[entry_index] if self.search_results else self.entries[entry_index]
 
-        # Create a dialog for editing the entry
         dialog = tk.Toplevel(self.root)
         dialog.title("Edit Entry")
 
         tk.Label(dialog, text="Edit Title:", font=("Helvetica", 12)).grid(row=0, column=0, padx=10, pady=10)
         title_entry = tk.Entry(dialog, width=40, font=("Helvetica", 12))
-        title_entry.insert(0, entry['title'])  # Set current title
+        title_entry.insert(0, entry['title'])
         title_entry.grid(row=0, column=1, padx=10, pady=10)
 
         tk.Label(dialog, text="Edit Content:", font=("Helvetica", 12)).grid(row=1, column=0, padx=10, pady=10)
         content_text = scrolledtext.ScrolledText(dialog, wrap=tk.WORD, width=40, height=10, font=("Helvetica", 12))
-        content_text.insert(tk.END, entry['content'])  # Set current content
+        content_text.insert(tk.END, entry['content'])
         content_text.grid(row=1, column=1, padx=10, pady=10)
 
         def save_changes():
@@ -158,9 +163,9 @@ class DigitalJournalApp:
             if not new_title:
                 messagebox.showerror("Error", "Title cannot be empty.")
                 return
-            # Update entry and save to file
             entry['title'] = new_title
             entry['content'] = new_content
+            entry['date_modified'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             save_entries(self.entries)
             messagebox.showinfo("Entry Updated", "Your entry has been updated successfully.")
             self.refresh_treeview()
@@ -176,72 +181,48 @@ class DigitalJournalApp:
         """Display the content of the selected entry or hide the entry box if nothing is selected."""
         selected_item = self.entry_tree.selection()
         if not selected_item:
-            self.entry_text.pack_forget()  # Hide if nothing is selected
+            self.entry_text.pack_forget()
             return
 
         entry_index = self.entry_tree.index(selected_item)
-        selected_entry = self.search_results[entry_index] if self.search_results else self.entries[entry_index]
-
-        # Display the selected entry's details
-        self.entry_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        entry = self.search_results[entry_index] if self.search_results else self.entries[entry_index]
         self.entry_text.config(state=tk.NORMAL)
         self.entry_text.delete(1.0, tk.END)
-        self.entry_text.insert(tk.END, f"Title: {selected_entry['title']}\n")
-        self.entry_text.insert(tk.END, f"Date: {selected_entry['timestamp']}\n\n")
-        self.entry_text.insert(tk.END, selected_entry['content'])
+        self.entry_text.insert(tk.END, entry['content'])
         self.entry_text.config(state=tk.DISABLED)
+        self.entry_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
     def delete_entry(self):
-        """Delete the selected entry."""
+        """Delete the selected entry from the list."""
         selected_item = self.entry_tree.selection()
         if not selected_item:
             messagebox.showwarning("Select Entry", "Please select an entry to delete.")
             return
 
         entry_index = self.entry_tree.index(selected_item)
-        deleted_entry = self.search_results.pop(entry_index) if self.search_results else self.entries.pop(entry_index)
-        save_entries(self.entries)
+        entry = self.search_results[entry_index] if self.search_results else self.entries[entry_index]
 
-        messagebox.showinfo("Entry Deleted", f"Deleted entry: {deleted_entry['title']}")
-        self.refresh_treeview()
-
-        # Clear the entry text box if no entries remain
-        if not self.entries:
-            self.entry_text.pack_forget()
-        else:
-            self.entry_text.config(state=tk.NORMAL)
-            self.entry_text.delete(1.0, tk.END)
-            self.entry_text.config(state=tk.DISABLED)
+        confirm = messagebox.askyesno("Delete Entry", "Are you sure you want to delete this entry?")
+        if confirm:
+            self.entries.remove(entry)
+            save_entries(self.entries)
+            messagebox.showinfo("Entry Deleted", "The entry has been deleted successfully.")
+            self.refresh_treeview()
 
     def search_entries(self):
-        """Search entries by title."""
-        query = self.search_entry.get().strip().lower()
-        self.entry_tree.delete(*self.entry_tree.get_children())
-        self.search_results = [entry for entry in self.entries if query in entry['title'].lower()]
-
-        if self.search_results:
-            for entry in self.search_results:
-                self.entry_tree.insert("", "end", values=(entry['title'], entry['timestamp']))
-        else:
-            self.entry_tree.insert("", "end", values=("No matching entries found.", ""))
-
-        self.entry_text.pack_forget()
+        """Search entries by title and update the treeview."""
+        search_text = self.search_entry.get().strip().lower()
+        self.search_results = [entry for entry in self.entries if search_text in entry['title'].lower()]
+        self.refresh_treeview()
 
     def reset_search(self):
-        """Reset the search field and display all entries."""
-        self.search_entry.delete(0, tk.END)  # Clear search entry
-        self.search_results.clear()  # Clear search results
-        self.entries = load_entries()  # Reload original entries
-        self.refresh_treeview()  # Show all entries
-
-
-def main():
-    root = tk.Tk()
-    app = DigitalJournalApp(root)
-    root.geometry("600x600")  # Increased height for better display
-    root.resizable(True, True)  # Allow the window to be resizable
-    root.mainloop()
+        """Reset search and display all entries."""
+        self.search_entry.delete(0, tk.END)
+        self.search_results = []
+        self.refresh_treeview()
 
 
 if __name__ == "__main__":
-    main()
+    root = tk.Tk()
+    app = DigitalJournalApp(root)
+    root.mainloop()
