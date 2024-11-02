@@ -9,14 +9,10 @@ JOURNAL_FILE = 'journal_entries.json'
 
 
 def load_entries():
-    """Load journal entries from the JSON file and add 'date_modified' if not present."""
+    """Load journal entries from the JSON file."""
     if os.path.exists(JOURNAL_FILE):
         with open(JOURNAL_FILE, 'r') as file:
             entries = json.load(file)
-            # Ensure 'date_modified' is present in each entry
-            for entry in entries:
-                if 'date_modified' not in entry:
-                    entry['date_modified'] = entry['timestamp']
             return entries
     return []
 
@@ -66,9 +62,10 @@ class DigitalJournalApp:
         # Treeview for displaying journal entries with Date Modified
         self.entry_tree = ttk.Treeview(self.root, columns=("Title", "Date Created", "Date Modified"), show='headings',
                                        height=10)
-        self.entry_tree.heading("Title", text="Title")
-        self.entry_tree.heading("Date Created", text="Date Created")
-        self.entry_tree.heading("Date Modified", text="Date Modified")
+        self.entry_tree.heading("Title", text="Title", command=lambda: self.sort_entries("title"))
+        self.entry_tree.heading("Date Created", text="Date Created", command=lambda: self.sort_entries("date_created"))
+        self.entry_tree.heading("Date Modified", text="Date Modified",
+                                command=lambda: self.sort_entries("date_modified"))
         self.entry_tree.column("Title", anchor="w", width=200)
         self.entry_tree.column("Date Created", anchor="w", width=120)
         self.entry_tree.column("Date Modified", anchor="w", width=120)
@@ -85,16 +82,20 @@ class DigitalJournalApp:
         self.entries = load_entries()
         self.search_results = []
         self.refresh_treeview()
+        self.sort_order = {"title": True, "date_created": True, "date_modified": True}  # Track sort order
 
     def refresh_treeview(self):
-        """Refresh the list of entries displayed in the treeview and manage placeholder text."""
+        """Refresh the list of entries displayed in the treeview."""
         self.entry_tree.delete(*self.entry_tree.get_children())
 
-        if not self.entries:
+        # Choose the entries to display based on search results or all entries
+        entries_to_display = self.search_results if self.search_results else self.entries
+
+        if not entries_to_display:
             self.entry_tree.insert("", "end", values=("No journal entries available.", "", ""))
             self.entry_text.pack_forget()
         else:
-            for entry in self.entries:
+            for entry in entries_to_display:
                 self.entry_tree.insert("", "end", values=(entry['title'], entry['timestamp'], entry['date_modified']))
 
     def add_entry(self):
@@ -178,14 +179,14 @@ class DigitalJournalApp:
         self.root.wait_window(dialog)
 
     def display_entry(self, event):
-        """Display the content of the selected entry or hide the entry box if nothing is selected."""
+        """Display the selected entry's content in the text area."""
         selected_item = self.entry_tree.selection()
         if not selected_item:
-            self.entry_text.pack_forget()
             return
 
         entry_index = self.entry_tree.index(selected_item)
         entry = self.search_results[entry_index] if self.search_results else self.entries[entry_index]
+
         self.entry_text.config(state=tk.NORMAL)
         self.entry_text.delete(1.0, tk.END)
         self.entry_text.insert(tk.END, entry['content'])
@@ -212,13 +213,31 @@ class DigitalJournalApp:
     def search_entries(self):
         """Search entries by title and update the treeview."""
         search_text = self.search_entry.get().strip().lower()
-        self.search_results = [entry for entry in self.entries if search_text in entry['title'].lower()]
+        if search_text:
+            self.search_results = [entry for entry in self.entries if search_text in entry['title'].lower()]
+        else:
+            self.search_results = []  # Reset if the search text is empty
+
         self.refresh_treeview()
 
     def reset_search(self):
         """Reset search and display all entries."""
         self.search_entry.delete(0, tk.END)
         self.search_results = []
+        self.refresh_treeview()
+
+    def sort_entries(self, key):
+        """Sort entries based on the selected key and refresh the treeview."""
+        self.sort_order[key] = not self.sort_order[key]  # Toggle sort order
+        reverse = not self.sort_order[key]
+
+        if key == "title":
+            self.entries.sort(key=lambda entry: entry['title'].lower(), reverse=reverse)
+        elif key == "date_created":
+            self.entries.sort(key=lambda entry: entry['timestamp'], reverse=reverse)
+        elif key == "date_modified":
+            self.entries.sort(key=lambda entry: entry['date_modified'], reverse=reverse)
+
         self.refresh_treeview()
 
 
